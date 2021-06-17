@@ -1,0 +1,302 @@
+实验三： 服务层实现
+======================================
+.. raw:: html
+
+   <center>
+
+   作者：诸斯涔 朱文琦 许璐怡 洪仪
+
+.. raw:: html
+
+   <br/>
+
+   来源：浙江师范大学
+
+.. raw:: html
+
+   &nbsp;&nbsp;&nbsp;&nbsp;
+
+   日期：2021/06/16
+
+.. raw:: html
+
+   </center>
+
+摘要
+------------------
+在用户阅读完一篇文章之后，为用户提供一篇适合自己当前水平的文章能较大程度地提高用户阅读体验以及提高用户的英文水平。因此，在本次实验中，我们编写了services.py文件，意在为English Pal项目实现一个服务层，提供read函数来解决为用户选择适合文章这个核心问题。此外，read函数还会根据实际情况抛出异常。
+
+介绍
+------------------
+本次实验是实验2的后续。在本次实验中，我们在services.py文件中为项目EnglishPal实现一个服务层，用来提供一个名叫read的核心服务。该服务将选择一篇适合用户阅读的文章。read函数接受user、user repo、article repo和session四个参数作为输入，如果用户已经成功地分配了要读取的文章，则返回文章ID。
+
+如果用户没有正确的密码或者用户名，那么read函数会抛出一个UnknownUser异常；如果在文章库中没有与之水平对应的文章，那么read函数会抛出一个 NoArticleMatched 异常；否则，read函数会提供一篇与用户的词汇水平相匹配的难度级别的文章。当且仅当文章难度等级（La）大于用户词汇等级（Lu）时，才能说是文章的难度等级与用户的词汇等级相匹配。如果有多篇文章的难度等级大于用户词汇等级，则选择文章难度等级最小的那一篇。
+
+一篇文章的难度等级记录在数据库表articles的level字段中。关于用户词汇等级的判断，如果用户的单词列表少于三个单词，那么用户的词汇等级等于用户单词列表中所有单词难度的平均；否则，用户的词汇等级等于用户单词列表中最新三个单词难度的平均。
+
+为简单起见，我们只考虑以下字典中的单词，其中的数值表示这些单词的难度级别。
+
+::
+
+    d={’starbucks’:5, ’luckin’:4, ’secondcup’:4, ’costa’:3, ’timhortons’:3, ’frappuccino’:6}
+
+
+实验过程
+------------------
+
+实验工具
+>>>>>>>>>>>>>>>>>>
+fixture
+::::::::::::::::::
+fixture区别于unnitest的传统单元测试（setup/teardown）有显著改进：
+
+1. 有独立的命名，并通过声明它们从测试函数、模块、类或整个项目中的使用来激活。
+
+#. 按模块化的方式实现，每个fixture都可以互相调用。
+
+#. fixture的范围从简单的单元测试到复杂的功能测试，可以对fixture配置参数，或者跨函数function，类class，模块module或整个测试session范围。
+
+SQLAlchemy
+::::::::::::::::::
+SQLAlchemy是一个常用的ORM工具，使用它可以快速方便的构建数据库模型。
+
+.. raw:: html
+
+   <center>
+
+.. image::  images/pic01.png
+
+图一 SQLAlchemy框架
+
+.. raw:: html
+
+   </center>
+
+::
+
+    组成部分：
+
+    Engine，框架的引擎
+
+    Connection Pooling ，数据库连接池
+
+    Dialect，选择连接数据库的DB API种类
+
+    Schema/Types，架构和类型
+
+    SQL Expression Language，SQL表达式语言
+
+    SQLAlchemy本身无法操作数据库，其必须以来pymsql等第三方插件，Dialect用于和数据API进行交流，根据配置文件的不同调用不同的数据库API，从而实现对数据库的操作。
+
+
+实验方法
+>>>>>>>>>>>>>>>>>>
+首先我们对实验讲义进行了解读，确认了在read函数包含判断用户是否合法登入、计算用户词汇的等级、选择与用户词汇等级相匹配的文章三个模块。
+
+先写抛出的两个异常以及词汇难度词典，如图二所示。
+
+
+.. raw:: html
+
+   <center>
+
+.. image::  images/pic02.png
+
+图二 异常以及词典代码
+
+.. raw:: html
+
+   </center>
+
+在判断用户是否合法登入模块中，应先获取用户信息，再判断用户是否存在、判断用户名是否存在以及用户密码是否存在，如果不是的话，就抛出UnknownUser异常，否则程序正常执行。如图三所示：
+
+.. raw:: html
+
+   <center>
+
+.. image::  images/pic03.png
+
+图三 判断用户是否合法登入代码
+
+.. raw:: html
+
+   </center>
+
+在计算用户词汇的等级模块中，先获取当前用户所有的生词，然后对对生词簿中的每个单词的难度建立列表，再根据生词薄中单词个数用不同的方法计算用户的词汇等级。当生词长度小于3时，那么用户的词汇等级等于用户单词列表中所有单词难度的平均；否则，用户的词汇等级等于用户单词列表中最新三个单词难度的平均。如图四所示：
+
+.. raw:: html
+
+   <center>
+
+.. image::  images/pic04.png
+
+图四 计算用户词汇的等级代码
+
+.. raw:: html
+
+   </center>
+
+在选择与用户词汇等级相匹配文章的模块中，先获取数据库中所有的文章记录，然后初始化当前最合适的article level、当前最合适的article、当前最合适的article的id，再依次遍历文章，当文章难度等级大于用户词汇等级且小于当前article level时，则替换。如果用户词汇等级大于article level，那么抛出一个NoArticleMatched异常。如图五所示：
+
+.. raw:: html
+
+   <center>
+
+.. image::  images/pic05.png
+
+图五 选择与用户词汇等级相匹配的文章代码
+
+.. raw:: html
+
+   </center>
+
+显示文章并且在当前用户读过的文章数据库表中记录该文章，如图六所示：
+
+.. raw:: html
+
+   <center>
+
+.. image::  images/pic06.png
+
+图六 显示文章代码
+
+.. raw:: html
+
+   </center>
+
+实验结果
+------------------
+运行test_services.py文件，实验结果达到预期，五条测试用例皆通过。如图七所示：
+
+.. raw:: html
+
+   <center>
+
+.. image::  images/pic07.png
+
+图七 测试结果截图
+
+.. raw:: html
+
+   </center>
+
+
+代码修改
+>>>>>>>>>>>>>>>>>>
+
+services.py
+::::::::::::::::::
+在services.py文件中，我们对read函数的功能逻辑进行了完善和实现，增加了判断用户是否合法登入、计算用户词汇的等级、选择与用户词汇等级相匹配的文章的功能。
+
+services.py修改代码处如图八所示：
+
+.. raw:: html
+
+   <center>
+
+.. image:: images/pic08.png
+
+图八 services.py修改代码处
+
+.. raw:: html
+
+   </center>
+
+conftest.py
+::::::::::::::::::
+
+在conftest.py文件中，我们也只对数据库文件的路径进行了修改，如图九所示：
+
+.. raw:: html
+
+   <center>
+
+.. image:: images/pic09.png
+
+图九 conftest.py修改代码处
+
+.. raw:: html
+
+   </center>
+
+实验总结
+------------------
+**问题：在services.py文件中的read函数是否遵循单一责任原则（SRP）原则？为什么是或为什么不是？**
+
+
+**单一职责原则**：就一个类而言，应该仅有一个引起它变化的原因。
+
+单一职责原则的好处是：一个类，只有一个引起它变化的原因。应该只有一个职责。每一个职责都是变化的一个轴线，如果一个类有一个以上的职责，这些职责就耦合在了一起。这会导致脆弱的设计。当一个职责发生变化时，可能会影响其它的职责。另外，多个职责耦合在一起，会影响复用性。例如：要实现逻辑和界面的分离。
+
+单一职责原则的指导思想：在一个类中如果可能会有多个可能需要变化的东西，尽量保证只有一个可以变化，其他变化的就让其放在其他类中，这样来的好处就是提高内聚，降低耦合。
+
+**由此可以判断，我们在services.py中read函数不遵循单一职责原则(SRP)。** 在read函数中，它有很多职责，判断用户是否合法登入、计算用户词汇的等级、选择与用户词汇等级相匹配的文章，其中在计算用户词汇的等级中，又分成了两个职责，用户的单词列表少于三个单词时计算用户的词汇等级、用户的单词列表大于等于三个单词时计算用户的词汇等级。
+
+
+实验代码
+------------------
+
+services.py
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+::
+
+    # word and its difficulty level
+    import model
+
+    WORD_DIFFICULTY_LEVEL = {'starbucks': 5, 'luckin': 4, 'secondcup': 4, 'costa': 3, 'timhortons': 3, 'frappuccino': 6}
+
+
+    class UnknownUser(Exception):
+        pass
+
+
+    class NoArticleMatched(Exception):
+        pass
+
+
+    def read(user, user_repo, article_repo, session):
+        legal_user = user_repo.get(user.username)  # 合法登录用户
+        if legal_user is None or legal_user.username != user.username or legal_user.password != user.password:
+            raise UnknownUser
+
+        new_word = session.query(model.NewWord).filter_by(username=user.username).all()  # 查询当前用户的所有生词
+
+        word_diff = 0  # 初始生词难度为0
+        lst_num = []  # 单词难度的数字列表
+        for word in new_word:
+            lst_num.append(WORD_DIFFICULTY_LEVEL[word.word])  # 对生词簿中的每个单词的难度建立列表
+
+        if len(lst_num) < 3:  # 当生词长度小于3
+            for l in lst_num:
+                word_diff += l
+            word_diff /= len(lst_num)
+        else:  # 当生词长度大于等于3
+            word_diff = (lst_num[len(lst_num) - 1] + lst_num[len(lst_num) - 2] + lst_num[len(lst_num) - 3]) / 3
+
+        articles = session.query(model.Article).all()
+
+        best_level = articles[0].level  # 记录当前最合适的article level
+        best_article = articles[0]  # 记录当前最合适的article
+        best_article_id = 1  # 记录当前最合适的article的id
+
+        for article in articles:
+            if word_diff < article.level < best_level:  # 当循环到的article的level高于目前的词汇level且小于当前最合适的article level
+                best_article_id = article.article_id
+                best_level = article.level
+                best_article = article
+
+        if word_diff > best_level:
+            raise NoArticleMatched
+
+        session.query(model.User).filter_by(username=user.username).one().read_article(best_article)
+        session.commit()
+
+        return best_article_id
+
+参考资料
+------------------
+1. Harry Percival and Bob Gregory. Architecture Patterns with Python. O’Reilly Media; 1st edition (March 31, 2020)
+2. SQLAlchemy使用笔记 https://blog.csdn.net/billvsme/article/details/50197197
+3. reStructuredText(rst)快速入门语法说明 https://www.cnblogs.com/seayxu/p/5603876.html
+
